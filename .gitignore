@@ -1,0 +1,19 @@
+# Build/derived artifacts
+build/
+*.xcarchive
+*.ipa
+Payload/
+DerivedData/
+
+# macOS / Xcode user state
+.DS_Store
+xcuserdata/
+*.xcuserstate
+
+# Never commit credentials or local signing state
+*.p12
+*.mobileprovision
+*.cer
+*.pem
+.env
+secrets.*

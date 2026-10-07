@@ -1,0 +1,65 @@
+# project.yml — XcodeGen project spec for DebianTerminal.
+#
+# Generate the Xcode project with:
+#     brew install xcodegen
+#     xcodegen generate
+#
+# Or open the checked-in DebianTerminal.xcodeproj directly (this project.yml is
+# the source of truth; regenerate after changing the file set).
+name: DebianTerminal
+options:
+  bundleIdPrefix: dev.debianterminal
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    CODE_SIGN_ENTITLEMENTS: App/DebianTerminal.entitlements
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    ONLY_ACTIVE_ARCH: YES
+    # JIT / subprocess / developer-mode friendly
+    CODE_SIGNING_ALLOWED: YES
+    DEVELOPMENT_TEAM: ""   # set your Apple team id for device signing
+
+targets:
+  DebianTerminal:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Terminal
+      - path: VM
+    resources:
+      # Bundled as a folder reference so qemu-system-aarch64, Image, initrd.img
+      # (and optionally debian12.img) keep their `Resources/` path inside the
+      # .app bundle at Resources/<name>.
+      - path: Resources
+        type: folder
+        buildPhase: resources
+    info:
+      path: App/Info.plist
+    entitlements:
+      path: App/DebianTerminal.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.debianterminal.app
+        PRODUCT_NAME: DebianTerminal
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/DebianTerminal.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        GENERATE_INFOPLIST_FILE: NO
+
+# A buildable scheme so `xcodebuild -scheme DebianTerminal` and IPA packaging work.
+schemes:
+  DebianTerminal:
+    build:
+      targets:
+        DebianTerminal: all
+    run:
+      config: Debug
+    archive:
+      config: Release

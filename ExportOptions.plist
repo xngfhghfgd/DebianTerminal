@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  ExportOptions.plist — controls how package-ipa.sh signs and exports the app.
+
+	  method = development:
+	    The JIT entitlements (com.apple.security.cs.allow-unsigned-executable-memory,
+	    allow-jit, get-task-allow) are DEVELOPMENT entitlements. They are only
+	    honored when the app is signed with a development certificate (personal team)
+	    and installed on a device with Developer Mode enabled. A Distribution /
+	    App Store / hardened ad-hoc export will strip or ignore them and QEMU will
+	    not be able to allocate executable memory.
+
+	  For your own device: install the resulting .ipa, enable Developer Mode, and
+	  sideload with SideStore/AltStore (or any channel that keeps your dev signature).
+	-->
+	<key>method</key>
+	<string>development</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>YOUR_TEAM_ID</string>
+	<key>compileBitcode</key>
+	<false/>
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>uploadSymbols</key>
+	<false/>
+</dict>
+</plist>

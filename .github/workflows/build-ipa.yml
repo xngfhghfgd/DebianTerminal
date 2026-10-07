@@ -1,0 +1,91 @@
+name: Build IPA
+
+# Build the DebianTerminal iOS app on a macOS runner and package it as an .ipa.
+# Runs on every push to main and on manual dispatch.
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-14          # macOS runner with Xcode preinstalled
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build & archive (signed)
+        if: ${{ secrets.APPLE_TEAM_ID != '' }}
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild \
+            -project DebianTerminal.xcodeproj \
+            -scheme DebianTerminal \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/DebianTerminal.xcarchive \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            archive
+
+      - name: Export signed IPA
+        if: ${{ secrets.APPLE_TEAM_ID != '' }}
+        run: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath build/DebianTerminal.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ipa \
+            -allowProvisioningUpdates
+
+      # No Apple signing secrets -> build an UNSIGNED .app and zip an unsigned
+      # .ipa. This proves the Swift code compiles but will NOT install on a device
+      # (iOS requires a signed bundle; JIT also needs dev signing + Developer Mode).
+      - name: Build unsigned archive
+        if: ${{ secrets.APPLE_TEAM_ID == '' }}
+        run: |
+          xcodebuild \
+            -project DebianTerminal.xcodeproj \
+            -scheme DebianTerminal \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/DebianTerminal.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      - name: Package unsigned IPA (Payload/DebianTerminal.app)
+        if: ${{ secrets.APPLE_TEAM_ID == '' }}
+        run: |
+          APP="build/DebianTerminal.xcarchive/Products/Applications/DebianTerminal.app"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          ditto -c -k --keepParent Payload/DebianTerminal.app DebianTerminal-unsigned.ipa
+          ls -lh DebianTerminal-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DebianTerminal-ipa
+          path: |
+            build/ipa/*.ipa
+            DebianTerminal-unsigned.ipa
+          if-no-files-found: error
+
+# NOTE — runtime guest artifacts (qemu-system-aarch64 for iOS, Image, initrd.img,
+# debian12.img) are NOT produced on the macOS runner. Build them on a Linux host
+# with Scripts/build-debian.sh (and on a Mac with Scripts/build-qemu.sh), then add
+# the small ones (Image, initrd.img, qemu-system-aarch64) to Resources/ and, for
+# the 8 GiB debian12.img, transfer it separately into the app's Documents/Debian/
+# on the device. The CI step above only compiles + packages the iOS app shell.
