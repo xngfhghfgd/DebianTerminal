@@ -49,8 +49,12 @@ need() {
 # --- Host toolchain ---------------------------------------------------------
 SDK_PATH="$(xcrun --sdk "$SDK" --show-sdk-path 2>/dev/null || die "iOS SDK not found. Is Xcode installed?")"
 TOOLCHAIN_PREFIX="$(xcrun -sdk "$SDK" -f clang)"
+AR_TOOL="$(xcrun -sdk "$SDK" -f ar 2>/dev/null || echo ar)"
+STRIP_TOOL="$(xcrun -sdk "$SDK" -f strip 2>/dev/null || echo strip)"
 log "iOS SDK: $SDK_PATH"
 log "clang : $TOOLCHAIN_PREFIX"
+log "ar    : $AR_TOOL"
+log "strip : $STRIP_TOOL"
 
 need meson ninja python3 make
 # macOS ships clang (no gcc unless brew-installed); accept either.
@@ -76,8 +80,8 @@ write_cross_file() {
 [binaries]
 c       = '$TOOLCHAIN_PREFIX'
 cpp     = '$TOOLCHAIN_PREFIX'
-ar      = 'llvm-ar'
-strip   = 'llvm-strip'
+ar      = '$AR_TOOL'
+strip   = '$STRIP_TOOL'
 pkgconfig = 'pkg-config'
 
 [built-in options]
