@@ -102,24 +102,24 @@ final class TerminalSession: ObservableObject {
         var i = 0
         while i < scalars.count {
             let sc = scalars[i]
-            if sc == 0x1B { // ESC
+            if sc.value == 0x1B { // ESC
                 // ESC [ or ESC ] -> consume to the final byte.
                 i += 1
-                if i < scalars.count, scalars[i] == 0x5B {         // '['
+                if i < scalars.count, scalars[i].value == 0x5B {         // '['
                     i += 1
                     while i < scalars.count {
                         let b = scalars[i]
                         if (0x40...0x7E).contains(b.value) { break }
                         i += 1
                     }
-                } else if i < scalars.count, scalars[i] == 0x5D {  // ']' (OSC)
+                } else if i < scalars.count, scalars[i].value == 0x5D {  // ']' (OSC)
                     i += 1
-                    while i < scalars.count, scalars[i] != 0x07, scalars[i] != 0x1B {
+                    while i < scalars.count, scalars[i].value != 0x07, scalars[i].value != 0x1B {
                         i += 1
                     }
                 }
                 i += 1
-            } else if sc.value < 0x20 && sc != 0x0A && sc != 0x0D {
+            } else if sc.value < 0x20 && sc.value != 0x0A && sc.value != 0x0D {
                 // Skip other raw control bytes (bell, etc.) but keep LF/CR.
                 i += 1
             } else {
