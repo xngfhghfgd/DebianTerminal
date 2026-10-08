@@ -22,6 +22,15 @@ DebianTerminal 的 CI（GitHub Actions）已经能编译 iOS App 并打包 IPA�
 
 > 需要 Apple Developer Program 付费账号（¥688/年 或 $99/年），用免费账号无法签发用于真机的证书。
 
+> **⚠️ 免费账号有例外——本项目场景可用**：UTM（iOS 上跑 QEMU 的权威项目）官方文档明确，
+> 「For stock iOS devices, you can sign with either a free developer account or a paid
+> developer account. Free accounts have a 7 day expire time and must be re-signed every
+> 7 days.」即**免费个人账号（Personal Team）也能签名带 JIT entitlement 的构建**，只是
+> 描述文件 7 天过期，需用 SideStore/AltStore 每 7 天自动重新签名。若你没有付费账号：
+> 用 Xcode 的「Personal Team」+ 自动签名在**你自己的 Mac** 上跑 `Scripts/package-ipa.sh`
+> 即可（或取 Xcode 自动生成到 `~/Library/MobileDevice/Provisioning Profiles/` 的
+> `.mobileprovision` + Keychain 里 `Apple Development:` 证书导出 `.p12` 喂给 CI）。
+
 ### 在 Mac 上导出这些内容（一次性操作）
 
 1. **证书**：钥匙串访问（Keychain Access）→ 登录 → 证书（Certificates）→ 找到
@@ -78,8 +87,11 @@ GitHub 网页操作：
 
 ## 常见问题
 
-- **Q：免费 Apple ID 行不行？** A：不行。真机安装/推送/描述文件都需要 Apple Developer
-  Program 付费成员。仅模拟器不需要签名，但 QEMU/JIT 场景必须真机。
+- **Q：免费 Apple ID 行不行？** A：可以（本场景）。UTM 官方确认免费账号可签名带 JIT 的
+  构建，但描述文件 **7 天过期**，需 SideStore/AltStore 周期重签（首次需要用电脑安装
+  SideStore/AltStore 并信任）。付费账号（¥688/年）则描述文件最长 1 年、日常省心。
+  注意免费 Personal Team 一条 App ID 最多 10 台设备、且 Xcode 自动签名的描述文件
+  默认只对 1 台设备有效——为多台设备需要手动创建 App Group/多设备描述文件。
 - **Q：CI 的 macOS runner 是免费的吗？** A：本仓库是 public，GitHub 为 public 仓库提供
   免费 macOS runner 分钟数；private 仓库在免费套餐**没有** macOS runner（开不了 iOS 构建）。
 - **Q：导出 archive 时报 "no profiles"？** A：Team ID 或描述文件不匹配（bundle id 应为
