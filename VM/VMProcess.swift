@@ -58,8 +58,11 @@ final class VMProcess {
         }
         // Close the slave fd in the child once duplicated.
         posix_spawn_file_actions_addclose(&actions, slave)
-        // Reclaim descriptors >= 3 in the child.
+        // Reclaim descriptors >= 3 in the child. The _np variant (closefrom)
+        // is macOS-only; on iOS the duplicated slave is enough for QEMU.
+        #if os(macOS)
         posix_spawn_file_actions_add_closefrom_np(&actions, 3)
+        #endif
 
         // Build a C argv.
         var cArgs: [UnsafeMutablePointer<CChar>?] = argv.map { strdup($0) }
@@ -146,7 +149,14 @@ final class VMProcess {
         var status: Int32 = 0
         let r = waitpid(pid, &status, 0)
         if r >= 0 {
-            exitCode = WEXITSTATUS(status)
+            // WEXITSTATUS() is a function-like C macro and not exposed to Swift
+            // on iOS; compute it by hand (exit code is the status high byte).
+            if (status & 0x7F) == 0 {
+                exitCode = (status >> 8) & 0xFF
+            } else {
+                // Terminated by a signal: report 128+signal (shell convention).
+                exitCode = Int32(128 + Int(status & 0x7F))
+            }
         }
         running = false
         if masterFD >= 0 { close(masterFD); masterFD = -1 }
