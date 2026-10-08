@@ -173,6 +173,36 @@ shutdown timeout are all in `VMConfig`. Everything is persisted to
 
 ---
 
+## Getting a ready-made IPA (CI)
+
+`.github/workflows/build-ipa.yml` builds the app on a free macOS runner for
+every push to `main` (or manual `workflow_dispatch`) and uploads the product as
+an Actions artifact:
+
+```sh
+# latest run + artifact (replace RUN_ID with the newest run's number):
+#   https://github.com/xngfhghfgd/DebianTerminal/actions/runs/<RUN_ID>
+```
+
+- The artifact is `DebianTerminal-ipa.zip` containing `DebianTerminal-unsigned.ipa`.
+- The unsigned IPA is zipped as `Payload/DebianTerminal.app/...` (the standard
+  layout SideStore/AltStore can parse) and bundles the ARM64 kernel `Image` +
+  `initrd.img`; on first launch the app copies them to `Documents/Debian/`.
+- **Signing**: with no Apple secrets set, CI emits an *unsigned* IPA. Install it
+  with **SideStore / AltStore**, which re-sign it on-device with **your own
+  (free) Apple ID** — valid 7 days, auto re-signed by SideStore (paid account
+  removes the churn; see `Docs/IPA_SIGNING.md`).
+- To have CI *export a signed IPA itself*, set the four repo secrets
+  `APPLE_TEAM_ID`, `APPLE_CERT_P12_BASE64`, `APPLE_CERT_P12_PASSWORD`,
+  `APPLE_PROVISIONING_BASE64` — `Scripts/setup-signing.sh` automates exporting
+  them from a Mac keychain in one command.
+- **On-device file drop**: `Info.plist` declares `UIFileSharingEnabled` so the
+  Files app can write into the app's sandbox. Drop the (never bundled) 8 GiB
+  `debian12.img` and `qemu-system-aarch64` into
+  `Files → On My iPad → DebianTerminal → Debian/`.
+
+---
+
 ## Configuration reference (`VMConfig`)
 
 | Field | Default | Notes |
@@ -198,9 +228,17 @@ and disk persistence across a reboot.
 
 ### Honest scope
 
-- The **guest chain is fully verified** on the Linux dev host.
-- The **iOS app source** is authored and reviewed here but **not compiled/run**
-  (no macOS/Xcode on this host). The QEMU-for-iOS cross-build and the app build
-  must be validated on a Mac with Xcode + Developer Mode device.
+- The **guest chain is fully verified** on the Linux dev host: Debian 12.15
+  boots in QEMU AArch64; systemd, bash, apt + network, and disk persistence all
+  confirmed live. See `Docs/POC_VERIFICATION.md`.
+- The **iOS app compiles** on the CI macOS runner (Xcode 16 / iOS SDK) and the
+  **unsigned IPA is verified** to contain the arm64 binary, bundled
+  `Image`/`initrd.img`, and a correct `Payload/` layout. It has **not** been
+  installed on an actual iPhone/iPad on this host (no iOS hardware available),
+  so first-launch behavior of the app itself is still to be confirmed by the
+  user's on-device run.
+- **QEMU for iOS** (`qemu-system-aarch64`) must be built on a Mac
+  (`Scripts/build-qemu.sh`) — not produced here; the app looks for it in
+  `Documents/Debian/`.
 - QEMU full-system TCG emulation on a phone is slow; expect usable but not
   native performance.
