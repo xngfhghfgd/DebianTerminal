@@ -235,11 +235,11 @@ EOF
             --cross-file "$OUT_DIR/cross-ios.txt" \
             --prefix="$PREFIX" \
             -Ddefault_library=static \
-            -Dtests=false -Dglib_debug=false -Dlibmount=disabled \
-            -Dselinux=disabled -Dxattr=disabled -Dsystemtap=false \
-            -Dnls=disabled -Ddocs=false -Dman=false \
+            -Dtests=false -Dglib_debug=disabled \
+            -Dlibmount=disabled -Dselinux=disabled -Dxattr=false \
+            -Dsystemtap=false -Dnls=disabled \
             -Doss-fuzz=disabled -Dintrospection=disabled \
-            -Dlibressl=disabled -Dlibelf=disabled \
+            -Dlibelf=disabled \
             || die "glib meson setup failed"
         ninja -C build -j"$JOBS" && ninja -C build install
     )
