@@ -149,9 +149,17 @@ and documents the saved-JIT slices. See the script header and `Docs/JIT.md`.
    and is what defines the file set; regenerate after adding/removing sources.
 2. Set your Apple **Developer Team** in the Signing pane (project.yml leaves
    `DEVELOPMENT_TEAM` empty), and set device signing (personal team is fine).
-3. Drop the runtime artifacts into `Resources/` so they are packaged:
-   `qemu-system-aarch64`, `Image`, `initrd.img`, `debian12.img`. (The app can
-   also be pointed at files in its `Documents/Debian/` dir via Settings.)
+3. Runtime artifacts: `Image` and `initrd.img` are already in `Resources/` and
+   are bundled into the .app by `project.yml` (each listed in `sources` with
+   `buildPhase: resources` — NOT the top-level `resources:` key, which XcodeGen
+   silently drops when a target has multiple `sources:` entries,
+   https://github.com/yonaskolb/XcodeGen/issues/1645). On first launch the app
+   seeds them into `Documents/Debian/` automatically
+   (`VMConfig.seedRuntimeFilesFromBundle()`). Add `qemu-system-aarch64`
+   (from `Scripts/build-qemu.sh`) to `Resources/` so it is bundled too; it is
+   `optional: TRUE` in project.yml. The 8 GiB `debian12.img` is never bundled —
+   generate it with `Scripts/build-debian.sh` and place it in
+   `Documents/Debian/` (or point Settings at an existing file).
 4. **Enable Developer Mode** on the device
    (`Settings → Privacy & Security → Developer Mode`); it grants the JIT and
    subprocess entitlements.
