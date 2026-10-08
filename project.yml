@@ -9,10 +9,10 @@
 name: DebianTerminal
 options:
   bundleIdPrefix: dev.debianterminal
-  # Pin the .pbxproj format to Xcode 15-compatible (the macOS-14 Actions runner
-  # ships Xcode 15.4, which cannot open the Xcode 16 format "77" that newer
-  # XcodeGen versions emit by default).
-  xcodeVersion: "15.4"
+  # XcodeGen 2.45+ emits the pbxproj in Xcode 16's object format (objectVersion
+  # 77) which Xcode <=15.4 cannot open ("future Xcode project file format").
+  # The CI workflow therefore builds on the macos-15 (Xcode 16) runner.
+  xcodeVersion: "16.0"
   deploymentTarget:
     iOS: "15.0"
   createIntermediateGroups: true

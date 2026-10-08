@@ -9,7 +9,9 @@ on:
 
 jobs:
   build-ipa:
-    runs-on: macos-14          # macOS runner with Xcode preinstalled
+    # XcodeGen 2.45+ emits the .pbxproj in Xcode 16's object format (77), which
+    # Xcode <=15.4 (macos-14) cannot open — so build on macos-15 / Xcode 16.
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
