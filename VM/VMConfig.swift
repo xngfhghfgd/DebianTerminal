@@ -63,6 +63,24 @@ struct VMConfig: Codable, Equatable {
     func kernelURL()     -> URL { Self.debianDirectory().appendingPathComponent(kernelName) }
     func initrdURL()     -> URL { Self.debianDirectory().appendingPathComponent(initrdName) }
 
+    /// Seed the read-only bundled guest files (kernel, initrd, qemu binary)
+    /// into Documents/Debian on first launch, so the VM starts without any
+    /// manual file setup. The 8 GiB disk image is user-supplied and never
+    /// bundled, so it is not copied.
+    static func seedRuntimeFilesFromBundle() {
+        let fm = FileManager.default
+        let dir = debianDirectory()
+        let names = ["Image", "initrd.img", "qemu-system-aarch64"]
+        for name in names {
+            let dest = dir.appendingPathComponent(name)
+            if fm.fileExists(atPath: dest.path) { continue }
+            guard let src = Bundle.main.url(forResource: name, withExtension: nil) else {
+                continue // not bundled (e.g. qemu built locally)
+            }
+            try? fm.copyItem(at: src, to: dest)
+        }
+    }
+
     /// Where the bundled (read-only) QEMU binary lives inside the app bundle.
     /// Because project.yml copies Resources as a folder reference, the binary
     /// is at `Resources/qemu-system-aarch64`; we also accept a flat location.

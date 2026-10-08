@@ -30,6 +30,9 @@ final class VMManager: ObservableObject {
     func start() {
         guard state == .stopped || state == .crashed else { return }
 
+        // Seed bundled kernel/initrd/qemu into Documents/Debian on first run.
+        VMConfig.seedRuntimeFilesFromBundle()
+
         // Re-validate everything up front: QEMU, JIT, kernel, disk.
         if let err = qemuManager.validate(config: config) {
             lastError = err.errorDescription

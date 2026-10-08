@@ -37,12 +37,20 @@ targets:
       - path: Terminal
       - path: VM
     resources:
-      # Bundled as a folder reference so qemu-system-aarch64, Image, initrd.img
-      # (and optionally debian12.img) keep their `Resources/` path inside the
-      # .app bundle at Resources/<name>.
-      - path: Resources
-        type: folder
-        buildPhase: resources
+      # Bundle the runtime artifacts as individual files so Xcode's Copy
+      # Bundle Resources phase reliably ships them (a `type: folder` reference
+      # was observed NOT reaching the built .app). They land at the app bundle
+      # root (`DebianTerminal.app/Image`, `.../initrd.img`), which
+      # VMConfig.bundledQEMUURL() and seedRuntimeFilesFromBundle() resolve.
+      # debian12.img is NOT bundled (8 GiB); the app seeds Image/initrd/qemu
+      # from the bundle into Documents/Debian on first launch.
+      - path: Resources/Image
+      - path: Resources/initrd.img
+      # Built by Scripts/build-qemu.sh; kept out of the repo so the Linux CI
+      # build (which has no QEMU-for-iOS binary) still passes. When present it
+      # is bundled automatically.
+      - path: Resources/qemu-system-aarch64
+        optional: TRUE
     info:
       path: App/Info.plist
     entitlements:
