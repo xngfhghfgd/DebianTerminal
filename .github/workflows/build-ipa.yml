@@ -25,54 +25,75 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build & archive (signed)
-        if: ${{ secrets.APPLE_TEAM_ID != '' }}
+      # Signed path requires these secrets, set in the repo Settings -> Secrets:
+      #   APPLE_TEAM_ID             (e.g. ABCDE12345)
+      #   APPLE_CERT_P12_BASE64     (developer cert exported from Keychain as .p12, base64)
+      #   APPLE_CERT_P12_PASSWORD   (password of the .p12)
+      #   APPLE_PROVISIONING_BASE64 (matching .mobileprovision, base64)
+      # Without them we produce an UNSIGNED .ipa (compiles, but iOS will refuse
+      # to install a signed-only bundle; JIT also needs dev signing + Developer Mode).
+      - name: Build & export IPA (signed or unsigned)
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_P12_PASSWORD: ${{ secrets.APPLE_CERT_P12_PASSWORD }}
+          APPLE_PROVISIONING_BASE64: ${{ secrets.APPLE_PROVISIONING_BASE64 }}
+        shell: bash
         run: |
-          xcodebuild \
-            -project DebianTerminal.xcodeproj \
-            -scheme DebianTerminal \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath build/DebianTerminal.xcarchive \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            archive
+          set -euo pipefail
+          SIGNED=0
+          if [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_CERT_P12_BASE64:-}" ] && [ -n "${APPLE_PROVISIONING_BASE64:-}" ]; then
+            SIGNED=1
+          fi
 
-      - name: Export signed IPA
-        if: ${{ secrets.APPLE_TEAM_ID != '' }}
-        run: |
-          xcodebuild \
-            -exportArchive \
-            -archivePath build/DebianTerminal.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath build/ipa \
-            -allowProvisioningUpdates
+          if [ "$SIGNED" = "1" ]; then
+            echo "==> Setting up signing identity (team $APPLE_TEAM_ID)"
+            CERT_P12="$RUNNER_TEMP/cert.p12"
+            echo "$APPLE_CERT_P12_BASE64" | base64 -d > "$CERT_P12"
+            KEYCHAIN="$RUNNER_TEMP/build.keychain"
+            security create-keychain -p "" "$KEYCHAIN"
+            security default-keychain -s "$KEYCHAIN"
+            security unlock-keychain -p "" "$KEYCHAIN"
+            security import "$CERT_P12" -k "$KEYCHAIN" -P "${APPLE_CERT_P12_PASSWORD:-}" -T /usr/bin/codesign -T /usr/bin/security
+            security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN"
 
-      # No Apple signing secrets -> build an UNSIGNED .app and zip an unsigned
-      # .ipa. This proves the Swift code compiles but will NOT install on a device
-      # (iOS requires a signed bundle; JIT also needs dev signing + Developer Mode).
-      - name: Build unsigned archive
-        if: ${{ secrets.APPLE_TEAM_ID == '' }}
-        run: |
-          xcodebuild \
-            -project DebianTerminal.xcodeproj \
-            -scheme DebianTerminal \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath build/DebianTerminal.xcarchive \
-            CODE_SIGNING_ALLOWED=NO \
-            archive
+            echo "==> Installing provisioning profile"
+            PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+            mkdir -p "$PROFILE_DIR"
+            echo "$APPLE_PROVISIONING_BASE64" | base64 -d > "$PROFILE_DIR/build.mobileprovision"
+            security cms -D -i "$PROFILE_DIR/build.mobileprovision" | grep -o '<key>UUID</key><string>[^<]*</string>' | sed 's/<key>UUID<\/key><string>//;s/<\/string>//' | xargs -I{} cp "$PROFILE_DIR/build.mobileprovision" "$PROFILE_DIR/{}.mobileprovision" || true
 
-      - name: Package unsigned IPA (Payload/DebianTerminal.app)
-        if: ${{ secrets.APPLE_TEAM_ID == '' }}
-        run: |
-          APP="build/DebianTerminal.xcarchive/Products/Applications/DebianTerminal.app"
-          mkdir -p Payload
-          cp -R "$APP" Payload/
-          ditto -c -k --keepParent Payload/DebianTerminal.app DebianTerminal-unsigned.ipa
-          ls -lh DebianTerminal-unsigned.ipa
+            echo "==> Archive (signed)"
+            xcodebuild -project DebianTerminal.xcodeproj -scheme DebianTerminal \
+              -configuration Release -destination 'generic/platform=iOS' \
+              -archivePath build/DebianTerminal.xcarchive \
+              CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+              archive
+
+            echo "==> Export IPA"
+            xcodebuild -exportArchive \
+              -archivePath build/DebianTerminal.xcarchive \
+              -exportOptionsPlist ExportOptions.plist \
+              -exportPath build/ipa \
+              -allowProvisioningUpdates
+
+            echo "==> Result"
+            ls -lh build/ipa/
+          else
+            echo "==> Archive (unsigned)"
+            xcodebuild -project DebianTerminal.xcodeproj -scheme DebianTerminal \
+              -configuration Release -destination 'generic/platform=iOS' \
+              -archivePath build/DebianTerminal.xcarchive \
+              CODE_SIGNING_ALLOWED=NO \
+              archive
+
+            echo "==> Package unsigned IPA (Payload/DebianTerminal.app)"
+            APP="$PWD/build/DebianTerminal.xcarchive/Products/Applications/DebianTerminal.app"
+            mkdir -p Payload
+            cp -R "$APP" Payload/
+            ditto -c -k --keepParent Payload/DebianTerminal.app DebianTerminal-unsigned.ipa
+            ls -lh DebianTerminal-unsigned.ipa
+          fi
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
@@ -88,4 +109,4 @@ jobs:
 # with Scripts/build-debian.sh (and on a Mac with Scripts/build-qemu.sh), then add
 # the small ones (Image, initrd.img, qemu-system-aarch64) to Resources/ and, for
 # the 8 GiB debian12.img, transfer it separately into the app's Documents/Debian/
-# on the device. The CI step above only compiles + packages the iOS app shell.
+# on the device. The CI steps above only compile + package the iOS app shell.
