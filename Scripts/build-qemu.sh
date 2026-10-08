@@ -128,6 +128,14 @@ build_deps() {
         curl -L -o libffi.tar.gz https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz
         tar xf libffi.tar.gz && mv libffi-3.4.6 libffi
     fi
+    # Apple Clang 17+/LLVM rejects non-private labels between
+    # .cfi_startproc/.cfi_endproc on Mach-O (D153167 / libffi issue #852).
+    # Fix from upstream PR #857 (8308bed5b2): move cfi_startproc after the
+    # CNAME(label) in the three ffi_*_SYSV entry points.
+    if [ -d libffi ]; then
+        log "Patching libffi sysv.S (cfi_startproc reorder for Apple Clang)..."
+        perl -0pi -e 's/\tcfi_startproc\nCNAME\(ffi_call_SYSV\):/CNAME(ffi_call_SYSV):\n\tcfi_startproc/g; s/\tcfi_startproc\nCNAME\(ffi_closure_SYSV\):/CNAME(ffi_closure_SYSV):\n\tcfi_startproc/g; s/\tcfi_startproc\nCNAME\(ffi_go_closure_SYSV\):/CNAME(ffi_go_closure_SYSV):\n\tcfi_startproc/g' src/aarch64/sysv.S
+    fi
     log "Building libffi for iOS..."
     (
         cd libffi
