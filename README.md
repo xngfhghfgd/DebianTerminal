@@ -201,6 +201,22 @@ an Actions artifact:
   `debian12.img` and `qemu-system-aarch64` into
   `Files → On My iPad → DebianTerminal → Debian/`.
 
+### Guest disk image (ready-made, download)
+
+The 8 GiB Debian 12 guest disk is published as a Git-LFS object in this repo:
+
+```sh
+# download (488 MB gzip; unzip → debian12.img, put it in Documents/Debian)
+curl -L -o debian12.img.gz \
+  https://github.com/xngfhghfgd/DebianTerminal/raw/main/dist/debian12.img.gz
+gzip -d debian12.img.gz
+```
+
+On the iPad: open that URL in Safari → the `.img.gz` lands in the Files app →
+unzip → move `debian12.img` into the DebianTerminal app's `Debian/` folder.
+(sha256 `5f44491f…5af0`; the file is the same disk verified in
+`Docs/POC_VERIFICATION.md`.)
+
 ---
 
 ## Configuration reference (`VMConfig`)
