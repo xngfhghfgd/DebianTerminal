@@ -154,7 +154,7 @@ build_deps() {
         curl -L -o pixman.tar.gz https://www.cairographics.org/releases/pixman-0.42.2.tar.gz
         tar xf pixman.tar.gz && mv pixman-0.42.2 pixman
     fi
-    log "Building pixman for iOS..."
+    log "Building pixman for iOS (library only — tests/demos link host libpng)..."
     (
         cd pixman
         ./configure \
@@ -165,7 +165,12 @@ build_deps() {
             --disable-mmx --disable-sse2 --disable-ssse3 --disable-vmx \
             CFLAGS="-target arm64-apple-ios$MIN_IOS -isysroot $SDK_PATH -miphoneos-version-min=$MIN_IOS" \
             CC="$TOOLCHAIN_PREFIX" || die "pixman configure failed"
-        make -j"$JOBS" && make install
+        # Build only the pixman library. The top-level `make` also recurses into
+        # demos/ + test/, whose programs link the host (Homebrew macOS) libpng —
+        # which the iOS linker refuses (cross-link error). Install the .pc by hand.
+        make -j"$JOBS" -C pixman || die "pixman make failed"
+        make -C pixman install || die "pixman install failed"
+        install -m 0644 pixman-1.pc "$PREFIX/lib/pkgconfig/"
     )
 
     # zlib: iOS SDK ships libz + zlib.h but no pkg-config file -> shim.
