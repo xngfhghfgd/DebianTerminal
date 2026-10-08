@@ -36,20 +36,25 @@ targets:
       - path: App
       - path: Terminal
       - path: VM
-    resources:
-      # Bundle the runtime artifacts as individual files so Xcode's Copy
-      # Bundle Resources phase reliably ships them (a `type: folder` reference
-      # was observed NOT reaching the built .app). They land at the app bundle
-      # root (`DebianTerminal.app/Image`, `.../initrd.img`), which
+      # Runtime artifacts. IMPORTANT: they are listed under `sources` (NOT the
+      # top-level `resources:` key) because XcodeGen 2.46 silently DROPS
+      # `resources:` entries when the target also has multiple `sources:`
+      # entries (yonaskolb/XcodeGen#1645) — the built .app then has no
+      # resources at all. `buildPhase: resources` puts each file into the
+      # Copy Bundle Resources phase at the .app root
+      # (`DebianTerminal.app/Image`, `.../initrd.img`), which
       # VMConfig.bundledQEMUURL() and seedRuntimeFilesFromBundle() resolve.
       # debian12.img is NOT bundled (8 GiB); the app seeds Image/initrd/qemu
       # from the bundle into Documents/Debian on first launch.
       - path: Resources/Image
+        buildPhase: resources
       - path: Resources/initrd.img
+        buildPhase: resources
       # Built by Scripts/build-qemu.sh; kept out of the repo so the Linux CI
       # build (which has no QEMU-for-iOS binary) still passes. When present it
       # is bundled automatically.
       - path: Resources/qemu-system-aarch64
+        buildPhase: resources
         optional: TRUE
     info:
       path: App/Info.plist
