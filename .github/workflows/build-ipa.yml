@@ -73,6 +73,10 @@ jobs:
               archive
 
             echo "==> Export IPA"
+            # ExportOptions.plist ships with a placeholder teamID; substitute the
+            # real one so -exportArchive signs with the correct team. (Old
+            # ExportOptions.plist in CI is regenerated from the repo copy.)
+            plutil -replace teamID -string "$APPLE_TEAM_ID" ExportOptions.plist
             xcodebuild -exportArchive \
               -archivePath build/DebianTerminal.xcarchive \
               -exportOptionsPlist ExportOptions.plist \

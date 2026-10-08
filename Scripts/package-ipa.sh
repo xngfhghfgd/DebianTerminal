@@ -69,6 +69,8 @@ xcodebuild \
 # --- sign for development & export an .ipa ------------------------------
 # Method is 'development' (JIT entitlements require a dev-signed app). For a
 # hardened/ad-hoc variant change ExportOptions.plist accordingly (JIT won't work).
+# ExportOptions.plist ships with a placeholder teamID; substitute the real one.
+plutil -replace teamID -string "$TEAM" ExportOptions.plist
 xcodebuild \
   -exportArchive \
   -archivePath build/DebianTerminal.xcarchive \
