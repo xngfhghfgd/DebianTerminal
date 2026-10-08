@@ -97,12 +97,11 @@ jobs:
             APP="$PWD/build/DebianTerminal.xcarchive/Products/Applications/DebianTerminal.app"
             mkdir -p Payload
             cp -R "$APP" Payload/
-            # Archive the Payload directory itself so the zip's top level is
-            # "Payload/DebianTerminal.app/..." — the standard IPA layout that
-            # SideStore/AltStore parse to find the .app inside the zip.
-            # (ditto --keepParent on Payload/DebianTerminal.app folded "Payload"
-            # away entirely, producing an install-invalid zip.)
-            ditto -c -k Payload DebianTerminal-unsigned.ipa
+            # Archive the Payload directory so the zip top level is
+            # "Payload/DebianTerminal.app/..." (the layout SideStore/AltStore
+            # expect). ditto's -c/-k behavior is surprising (it dropped the
+            # Payload/ prefix), so use zip, which is deterministic here.
+            zip -qry DebianTerminal-unsigned.ipa Payload
             echo "    zip layout (must show Payload/):"
             unzip -l DebianTerminal-unsigned.ipa | head -8
             ls -lh DebianTerminal-unsigned.ipa
