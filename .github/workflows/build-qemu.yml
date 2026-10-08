@@ -28,6 +28,12 @@ jobs:
       - name: Install toolchain deps
         run: |
           brew install meson ninja pkg-config
+          # glib's meson.build does `find_installation(modules:['packaging'])`;
+          # the runner's python3 lacks it, which aborts setup.
+          python3 -m pip install --quiet --break-system-packages packaging 2>/dev/null \
+            || python3 -m pip install --quiet --user packaging 2>/dev/null \
+            || true
+          python3 -c "import packaging; print('python packaging OK')"
 
       - name: Cross-compile QEMU for iOS
         shell: bash
