@@ -194,10 +194,14 @@ EOF
     log "Building libfdt (dtc) for iOS..."
     (
         cd dtc
-        # dtc builds via its own Makefile rules (no autotools). We need libfdt.
-        make -j"$JOBS" CC="$TOOLCHAIN_PREFIX" AR='llvm-ar' \
+        # dtc builds via its own Makefile rules (no autotools). We need the
+        # static libfdt archive only: the `libfdt` target also builds a .dylib
+        # (GNU-style -shared link flags, fails on Apple ld), so build the
+        # archive target directly. AR=ar (Apple cctools) — llvm-ar is not on
+        # the macos PATH; `ar` archives Mach-O objects regardless of target.
+        make -j"$JOBS" CC="$TOOLCHAIN_PREFIX" AR='ar' \
             CFLAGS="-target arm64-apple-ios$MIN_IOS -isysroot $SDK_PATH -miphoneos-version-min=$MIN_IOS -O2" \
-            libfdt
+            libfdt/libfdt.a
         install -m 0755 libfdt/libfdt.a "$PREFIX/lib/"
         mkdir -p "$PREFIX/include/libfdt"
         for h in libfdt/fdt.h libfdt/libfdt.h libfdt/libfdt_env.h libfdt/fdt_address_cells.h \
