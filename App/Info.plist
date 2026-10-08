@@ -21,6 +21,15 @@
     <key>CFBundleVersion</key>
     <string>1</string>
 
+    <!-- Expose Documents/Debian to the Files app so the user can drop in
+         debian12.img and qemu-system-aarch64 on-device (no computer needed). -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    <key>UISupportsDocumentBrowser</key>
+    <false/>
+
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>UIDeviceFamily</key>
