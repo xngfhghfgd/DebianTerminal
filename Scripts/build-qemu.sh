@@ -160,6 +160,9 @@ build_deps() {
         ./configure \
             --prefix="$PREFIX" --host=aarch64-apple-ios$MIN_IOS \
             --disable-shared --enable-static --disable-dependency-tracking \
+            --disable-arm-simd --disable-arm-neon --disable-arm-a64-neon \
+            --disable-arm-iwmmxt --disable-arm-iwmmxt2 --disable-mips-dspr2 \
+            --disable-mmx --disable-sse2 --disable-ssse3 --disable-vmx \
             CFLAGS="-target arm64-apple-ios$MIN_IOS -isysroot $SDK_PATH -miphoneos-version-min=$MIN_IOS" \
             CC="$TOOLCHAIN_PREFIX" || die "pixman configure failed"
         make -j"$JOBS" && make install
