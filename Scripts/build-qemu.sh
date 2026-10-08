@@ -238,7 +238,7 @@ EOF
             -Dtests=false -Dglib_debug=disabled \
             -Dlibmount=disabled -Dselinux=disabled -Dxattr=false \
             -Dsystemtap=false -Dnls=disabled \
-            -Doss-fuzz=disabled -Dintrospection=disabled \
+            -Doss_fuzz=disabled -Dintrospection=disabled \
             -Dlibelf=disabled \
             || die "glib meson setup failed"
         ninja -C build -j"$JOBS" && ninja -C build install
