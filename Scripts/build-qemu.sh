@@ -52,7 +52,22 @@ TOOLCHAIN_PREFIX="$(xcrun -sdk "$SDK" -f clang)"
 log "iOS SDK: $SDK_PATH"
 log "clang : $TOOLCHAIN_PREFIX"
 
-need meson ninja python3 make gcc
+need meson ninja python3 make
+# macOS ships clang (no gcc unless brew-installed); accept either.
+if ! command -v gcc >/dev/null 2>&1 && ! command -v clang >/dev/null 2>&1; then
+    die "Need a C compiler (gcc or clang)"
+fi
+
+# --- Parallelism (macOS has no nproc without coreutils) ----------------------
+if command -v sysctl >/dev/null 2>&1; then
+    JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+elif command -v nproc >/dev/null 2>&1; then
+    JOBS="$(nproc 2>/dev/null || echo 4)"
+else
+    JOBS="4"
+fi
+JOBS="${JOBS:-4}"
+log "Parallel jobs: $JOBS"
 
 # --- iOS cross-file for Meson ------------------------------------------------
 write_cross_file() {
@@ -80,11 +95,50 @@ EOF
 }
 
 # --- Build glib + pixman for iOS ----------------------------------------------
-# QEMU hard-depends on glib-2.0 and pixman. glib ships a Meson-based build.
+# QEMU hard-depends on glib-2.0 and pixman. glib ships a Meson-based build and
+# in turn hard-depends on libffi (gobject closures) + pcre2 (regex), which we
+# cross-build first. zlib comes from the iOS SDK but has no .pc, and QEMU's
+# aarch64 target requires libfdt — we synthesize both .pc shims.
 build_deps() {
     SRCDIR="$(pwd)/deps-src"
-    mkdir -p "$SRCDIR" "$PREFIX"
+    mkdir -p "$SRCDIR" "$PREFIX/lib/pkgconfig"
     cd "$SRCDIR"
+
+    # pcre2 (needed by glib)
+    if [ ! -d pcre2 ]; then
+        log "Fetching pcre2..."
+        curl -L -o pcre2.tar.gz https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.43/pcre2-10.43.tar.gz
+        tar xf pcre2.tar.gz && mv pcre2-10.43 pcre2
+    fi
+    log "Building pcre2 for iOS..."
+    (
+        cd pcre2
+        ./configure \
+            --prefix="$PREFIX" --host=aarch64-apple-darwin \
+            --disable-shared --enable-static --disable-jit \
+            --disable-pcre2grep-jit --enable-pcre2-8 \
+            CFLAGS="-target arm64-apple-ios$MIN_IOS -isysroot $SDK_PATH -miphoneos-version-min=$MIN_IOS" \
+            CC="$TOOLCHAIN_PREFIX" || die "pcre2 configure failed"
+        make -j"$JOBS" && make install
+    )
+
+    # libffi (needed by glib for GObject closures)
+    if [ ! -d libffi ]; then
+        log "Fetching libffi..."
+        curl -L -o libffi.tar.gz https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz
+        tar xf libffi.tar.gz && mv libffi-3.4.6 libffi
+    fi
+    log "Building libffi for iOS..."
+    (
+        cd libffi
+        ./configure \
+            --prefix="$PREFIX" --host=aarch64-apple-darwin \
+            --disable-shared --enable-static \
+            --disable-docs --disable-multi-os-directory \
+            CFLAGS="-target arm64-apple-ios$MIN_IOS -isysroot $SDK_PATH -miphoneos-version-min=$MIN_IOS -fno-common" \
+            CC="$TOOLCHAIN_PREFIX" || die "libffi configure failed"
+        make -j"$JOBS" && make install
+    )
 
     # pixman
     if [ ! -d pixman ]; then
@@ -100,8 +154,52 @@ build_deps() {
             --disable-shared --enable-static --disable-dependency-tracking \
             CFLAGS="-target arm64-apple-ios$MIN_IOS -isysroot $SDK_PATH -miphoneos-version-min=$MIN_IOS" \
             CC="$TOOLCHAIN_PREFIX" || die "pixman configure failed"
-        make -j"$(nproc)" && make install
+        make -j"$JOBS" && make install
     )
+
+    # zlib: iOS SDK ships libz + zlib.h but no pkg-config file -> shim.
+    cat > "$PREFIX/lib/pkgconfig/zlib.pc" <<EOF
+prefix=$SDK_PATH
+Name: zlib
+Description: zlib compression library (iOS SDK)
+Version: 1.2.12
+Libs: -lz
+Cflags: -I\${prefix}/usr/include
+EOF
+
+    # libfdt: aarch64-softmmu hard-requires it. QEMU's release tarball does NOT
+    # bundle dtc source, and meson looks for a pkg-config 'libfdt'. So we
+    # actually build the library (from dtc) rather than fake a .pc shim.
+    if [ ! -d dtc ]; then
+        log "Fetching dtc (libfdt)..."
+        curl -L -o dtc.tar.gz https://github.com/dgibson/dtc/archive/refs/tags/v1.7.0.tar.gz
+        tar xf dtc.tar.gz && mv dtc-1.7.0 dtc
+    fi
+    log "Building libfdt (dtc) for iOS..."
+    (
+        cd dtc
+        # dtc builds via its own Makefile rules (no autotools). We need libfdt.
+        make -j"$JOBS" CC="$TOOLCHAIN_PREFIX" AR='llvm-ar' \
+            CFLAGS="-target arm64-apple-ios$MIN_IOS -isysroot $SDK_PATH -miphoneos-version-min=$MIN_IOS -O2" \
+            libfdt
+        install -m 0755 libfdt/libfdt.a "$PREFIX/lib/"
+        mkdir -p "$PREFIX/include/libfdt"
+        for h in libfdt/fdt.h libfdt/libfdt.h libfdt/libfdt_env.h libfdt/fdt_address_cells.h \
+                 libfdt/fdt_empty_tree.h libfdt/fdt_ro.h libfdt/fdt_rw.h libfdt/fdt_sw.h; do
+            install -m 0644 "$h" "$PREFIX/include/libfdt/" 2>/dev/null || true
+        done
+        echo "libfdt built"
+    )
+
+    # libfdt.pc — QEMU's meson finds libfdt via pkg-config.
+    cat > "$PREFIX/lib/pkgconfig/libfdt.pc" <<EOF
+prefix=$PREFIX
+Name: libfdt
+Description: Flat Device Tree manipulation library
+Version: 1.7.0
+Libs: -L\${prefix}/lib -lfdt
+Cflags: -I\${prefix}/include/libfdt
+EOF
 
     # glib (depends on pcre2/ffi — build minimal). Use the meson build.
     if [ ! -d glib ]; then
@@ -121,8 +219,9 @@ build_deps() {
             -Dselinux=disabled -Dxattr=disabled -Dsystemtap=false \
             -Dnls=disabled -Ddocs=false -Dman=false \
             -Doss-fuzz=disabled -Dintrospection=disabled \
+            -Dlibressl=disabled -Dlibelf=disabled \
             || die "glib meson setup failed"
-        ninja -C build -j"$(nproc)" && ninja -C build install
+        ninja -C build -j"$JOBS" && ninja -C build install
     )
     cd "$OLDPWD"
 }
@@ -147,13 +246,13 @@ build_qemu() {
         --cross-file "$OUT_DIR/cross-ios.txt" \
         --prefix="$PREFIX" \
         --target-list=aarch64-softmmu \
-        --enable-tcg --disable-system --disable-tools --disable-docs \
+        --enable-tcg --disable-tools --disable-docs \
         --disable-guest-agent --disable-tests \
-        --enable-curses=disabled --enable-ncurses=disabled \
-        --enable-slirp=disabled --enable-vde=disabled --enable-netmap=disabled \
-        --enable-vnc=disabled --enable-rdma=disabled \
+        --disable-curses --disable-ncurses \
+        --disable-slirp --disable-vde --disable-netmap \
+        --disable-vnc --disable-rdma \
         --default-features=disabled \
-        --enable-virtfs=disabled \
+        --disable-virtfs \
         -Dexec_round_to_page=false || die "QEMU meson setup failed (check deps)."
 
     log "Building qemu-system-aarch64 (this takes several minutes)..."

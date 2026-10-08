@@ -1,0 +1,52 @@
+# Build qemu-system-aarch64 for iOS (arm64) on a free macOS runner.
+#
+# The iOS app needs a real `qemu-system-aarch64` Mach-O to boot the guest. The
+# user has no Mac, and neither does this authoring environment — but GitHub
+# Actions macos-15 runners ARE Macs (Xcode + iphoneos SDK included). This
+# workflow cross-compiles QEMU + its deps (pcre2, libffi, pixman, libfdt, glib)
+# with Scripts/build-qemu.sh and uploads the binary as an artifact.
+#
+# Trigger: manual (workflow_dispatch) or any push touching build-qemu.sh.
+name: Build QEMU for iOS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Scripts/build-qemu.sh'
+      - '.github/workflows/build-qemu.yml'
+
+jobs:
+  build-qemu-ios:
+    name: Cross-compile qemu-system-aarch64 (arm64 iOS)
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain deps
+        run: |
+          brew install meson ninja pkg-config
+
+      - name: Cross-compile QEMU for iOS
+        shell: bash
+        run: |
+          bash Scripts/build-qemu.sh
+
+      - name: Verify binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ls -lh out/qemu-system-aarch64
+          file out/qemu-system-aarch64
+          lipo -info out/qemu-system-aarch64 || true
+          otool -L out/qemu-system-aarch64 | head -20 || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-system-aarch64-ios
+          path: out/qemu-system-aarch64
+          if-no-files-found: error
+          retention-days: 14
